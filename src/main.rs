@@ -91,8 +91,19 @@ async fn main() -> anyhow::Result<()> {
             }
           }
         }
-      })).transact().await?;
+      })).deposit(10u128.pow(24)).transact().await?;
     println!("{:?}", add_upgrade_proposal);
+
+    // - Approve Proposal then finalize proposal
+    let approve_proposal = dao_contract.call("vote").args_json(json!({
+        "proposal_id": 0,
+        "vote": {
+          "Approve": {}
+        }
+      })).transact().await?;
+
+    // - Check if precompile works in aurora.test.near!
+    // TODO: add codes from main2.rs
 
     Ok(())
 }
