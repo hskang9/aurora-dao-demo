@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     // - Define a council
     let bob = common::create_account(&worker, "bob.test.near", None);
     let alice = common::create_account(&worker, "alice.test.near", None);
-    let council = ["bob.test.near", "alice.test.near"];
+    let council = ["test.near", "bob.test.near", "alice.test.near"];
 
     // - Configure name, purpose, and initial council members of the DAO and convert the arguments in base64
     let args = json!({
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
             "purpose": "Aurora internal test DAO",
             "metadata": "",
         },
-        "policy": ["bob.test.near",  "alice.test.near"],
+        "policy": ["test.near", "bob.test.near",  "alice.test.near"],
     });
     let args_bs64 = base64::encode(&serde_json::to_vec(&args).unwrap());
 
@@ -72,11 +72,27 @@ async fn main() -> anyhow::Result<()> {
     let mint_near = a.transfer_near(&aurora_dao_id, 10000000000000000000000000).await?;
     println!("{:?}", mint_near);
 
-    // - Get council to add store blob for aurora deployment code (aurora-testnet.wasm)
+    // - Get someone to add store blob for aurora deployment code (aurora-testnet.wasm)
     // get worker account more balance
     let aurora_wasm = std::fs::read("res/aurora-testnet.wasm")?;
     let store_blob = dao_contract.call("store_blob").args(aurora_wasm).deposit(9534940000000000000000000).gas(100054768750000).transact().await?;
     println!("{:?}", store_blob);
+    
+    // - Add proposal to upgrade aurora contract remotely
+    let add_upgrade_proposal = dao_contract.call("add_proposal").args_json(json!({
+        "proposal": {
+          "description": "Upgrade Aurora contract",
+          "kind": {
+            "UpgradeRemote": {
+              "receiver_id": "aurora.test.near",
+              "method_name": "migrate",
+              "hash": "HN2fH5y6mbBkvgsazk8qZtqwxEU6ykLPZjz3xNnmuVcG",
+              "role": "council"
+            }
+          }
+        }
+      })).transact().await?;
+    println!("{:?}", add_upgrade_proposal);
 
     Ok(())
 }
