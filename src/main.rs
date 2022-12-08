@@ -95,12 +95,14 @@ async fn main() -> anyhow::Result<()> {
     println!("{:?}", add_upgrade_proposal);
 
     // - Approve Proposal then finalize proposal
-    let approve_proposal = dao_contract.call("vote").args_json(json!({
-        "proposal_id": 0,
-        "vote": {
-          "Approve": {}
-        }
+    //contract.act_proposal(id, Action::Finalize, None);
+        
+    let act_proposal = dao_contract.call("act_proposal").args_json(json!({
+        "id": 0,
+        "action": "Finalize",
+        "memo": ""
       })).transact().await?;
+      println!("{:?}", act_proposal);
 
     // - Check if precompile works in aurora.test.near!
     // TODO: add codes from main2.rs
