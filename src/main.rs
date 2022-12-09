@@ -1,4 +1,7 @@
-use aurora_workspace::{types::{output::TransactionStatus, Account, KeyType, SecretKey}, EvmContract};
+use aurora_workspace::{
+    types::{output::TransactionStatus, Account, KeyType, SecretKey},
+    EvmContract,
+};
 use aurora_workspace_demo::common;
 use ethabi::{Constructor, Contract};
 use ethereum_tx_sign::{LegacyTransaction, Transaction};
@@ -12,13 +15,18 @@ const PRIVATE_KEY: [u8; 32] = [88u8; 32];
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     // 1. Create a sandbox environment.
     let worker = workspaces::sandbox().await?;
-    
+
+    worker.fast_forward(1).await?;
+
     // 2. deploy the Aurora EVM in sandbox.
-    let evm = common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.7.0.wasm").await?;
-    
+    let evm =
+        common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.7.0.wasm")
+            .await?;
+
+    worker.fast_forward(1).await?;
+
     let version_bf = evm.as_account().version().await?.result;
     println!("Aurora version before upgrade: {:?}", version_bf);
 
@@ -34,6 +42,8 @@ async fn main() -> anyhow::Result<()> {
         .await?
         .unwrap();
     println!("Contract Id: {}", dao_factory.id());
+
+    worker.fast_forward(1).await?;
     // Init daofactory contract
     let init_tx = dao_factory
         .call("new")
@@ -42,12 +52,13 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!("{:?}", init_tx);
 
+    worker.fast_forward(1).await?;
     // 4. Define parameters of new dao
 
     // - Define a council
     let bob = common::create_account(&worker, "bob.test.near", None).await?;
     let alice = common::create_account(&worker, "alice.test.near", None).await?;
-    
+
     // - Configure name, purpose, and initial council members of the DAO and convert the arguments in base64
     let args = json!({
         "config": {
@@ -74,6 +85,8 @@ async fn main() -> anyhow::Result<()> {
 
     println!("{:?}", create_new_dao);
 
+    worker.fast_forward(1).await?;
+
     // 5. Get the council deploy contract from dao
     let aurora_dao_id = AccountId::from_str(&format!("aurora-dao.{}", dao_factory.id()))?;
 
@@ -96,6 +109,7 @@ async fn main() -> anyhow::Result<()> {
     let mint_near3 = a
         .transfer_near(&alice.id(), 10000000000000000000000000)
         .await?;
+    worker.fast_forward(1).await?;
 
     // - Get someone to add store blob for aurora deployment code (aurora-testnet.wasm)
     // get worker account more balance
@@ -110,6 +124,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     // TODO: get result from this execution result type where it keeps result as private
     println!("{:?}", store_blob);
+
+    worker.fast_forward(1).await?;
 
     // - Add proposal to upgrade aurora contract remotely
     println!("Add Proposal");
@@ -133,6 +149,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!("{:?}", add_upgrade_proposal);
 
+    worker.fast_forward(1).await?;
+
     // - Approve Proposal
     println!("Approve Proposal");
     let approve_proposal1 = bob
@@ -147,6 +165,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!("{:?}", approve_proposal1);
 
+    worker.fast_forward(1).await?;
+
     let approve_proposal2 = alice
         .call(&dao_contract.id(), "act_proposal")
         .args_json(json!({
@@ -159,11 +179,12 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     println!("{:?}", approve_proposal2);
 
+    worker.fast_forward(1).await?;
+
     // - Proposal is finalized as all council vote yes, so check if precompile works in aurora.test.near!
     // Import Deployed Aurora contract
     let version_af = evm.as_account().version().await?.result;
     println!("Aurora version after upgrade: {}", version_af);
-    
+
     Ok(())
 }
-
