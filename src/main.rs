@@ -1,5 +1,5 @@
 use aurora_workspace::{
-    types::{ KeyType, SecretKey},
+    types::{ KeyType, SecretKey}, EvmContract,
 };
 use aurora_workspace_demo::common;
 use serde_json::json;
@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
     worker.fast_forward(1).await?;
 
     // 2. deploy the Aurora EVM in sandbox.
-    let evm =
+    let (evm, sk) =
         common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.7.0.wasm")
             .await?;
 
@@ -174,7 +174,8 @@ async fn main() -> anyhow::Result<()> {
 
     // - Proposal is finalized as all council vote yes, so check if precompile works in aurora.test.near!
     // Import Deployed Aurora contract
-    let version_af = evm.as_account().version().await?.result;
+    let evm_af = EvmContract::from_secret_key("aurora.test.near", sk, &worker)?;
+    let version_af = evm_af.as_account().version().await?.result;
     println!("Aurora version after upgrade: {}", version_af);
 
     Ok(())

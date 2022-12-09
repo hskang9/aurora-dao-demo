@@ -19,10 +19,10 @@ pub async fn create_account(worker: &Worker<Sandbox>, id: &str, sk: Option<Secre
     Ok(account) 
 }
 
-pub async fn init_and_deploy_contract_with_path(worker: &Worker<Sandbox>, path: &str) -> anyhow::Result<EvmContract> {
+pub async fn init_and_deploy_contract_with_path(worker: &Worker<Sandbox>, path: &str) -> anyhow::Result<(EvmContract, SecretKey)> {
     let sk = SecretKey::from_random(KeyType::ED25519);
     let evm_account = worker
-        .create_tla(AccountId::from_str(EVM_ACCOUNT_ID)?, sk)
+        .create_tla(AccountId::from_str(EVM_ACCOUNT_ID)?, sk.clone())
         .await?
         .into_result()?;
     let eth_prover_config = EthProverConfig::default();
@@ -36,7 +36,7 @@ pub async fn init_and_deploy_contract_with_path(worker: &Worker<Sandbox>, path: 
     // create contract
     let contract = EvmContract::deploy_and_init(evm_account, init_config, wasm).await?;
 
-    Ok(contract)
+    Ok((contract, sk))
 }
 
 pub async fn init_and_deploy_contract(worker: &Worker<Sandbox>) -> anyhow::Result<EvmContract> {
