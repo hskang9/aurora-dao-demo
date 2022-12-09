@@ -1,17 +1,11 @@
 use aurora_workspace::{
-    types::{output::TransactionStatus, Account, KeyType, SecretKey},
-    EvmContract,
+    types::{ KeyType, SecretKey},
 };
 use aurora_workspace_demo::common;
-use ethabi::{Constructor, Contract};
-use ethereum_tx_sign::{LegacyTransaction, Transaction};
 use serde_json::json;
-use std::{fs::File, str::FromStr};
+use std::{str::FromStr};
 use workspaces::AccountId;
 
-const ETH_RANDOM_HEX_PATH: &str = "./res/Random.hex";
-const ETH_RANDOM_ABI_PATH: &str = "./res/Random.abi";
-const PRIVATE_KEY: [u8; 32] = [88u8; 32];
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -99,16 +93,13 @@ async fn main() -> anyhow::Result<()> {
     // - Get policy
     let get_policy = dao_contract.view("get_policy").await?;
     println!("{:?}", get_policy);
-    let a = worker.root_account()?;
-    let mint_near1 = a
-        .transfer_near(&aurora_dao_id, 10000000000000000000000000)
-        .await?;
-    let mint_near2 = a
-        .transfer_near(&bob.id(), 10000000000000000000000000)
-        .await?;
-    let mint_near3 = a
-        .transfer_near(&alice.id(), 10000000000000000000000000)
-        .await?;
+    let root = worker.root_account()?;
+    root.transfer_near(&aurora_dao_id, 10000000000000000000000000)
+        .await?.into_result();
+    root.transfer_near(&bob.id(), 10000000000000000000000000)
+        .await?.into_result();
+    root.transfer_near(&alice.id(), 10000000000000000000000000)
+        .await?.into_result();
     worker.fast_forward(1).await?;
 
     // - Get someone to add store blob for aurora deployment code (aurora-testnet.wasm)
