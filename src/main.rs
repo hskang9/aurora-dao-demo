@@ -3,8 +3,10 @@ use aurora_workspace::{
 };
 use aurora_workspace_demo::common;
 use serde_json::json;
-use std::{str::FromStr};
+use std::{str::FromStr, sync::Arc};
 use workspaces::AccountId;
+use borsh::{BorshSerialize, BorshDeserialize};
+
 
 
 #[tokio::main]
@@ -16,13 +18,14 @@ async fn main() -> anyhow::Result<()> {
 
     // 2. deploy the Aurora EVM in sandbox.
     let (evm, sk) =
-        common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.7.0.wasm")
+        common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.8.0-set-owner.wasm")
             .await?;
 
     worker.fast_forward(1).await?;
 
+    
     let version_bf = evm.as_account().version().await?.result;
-    println!("Aurora version before upgrade: {:?}", version_bf);
+    println!("Aurora version before upgrade: {:?}", version_bf); 
 
     // 3. Deploy Spunik DAO factory contract in sandbox
     println!("Deploying Spunik DAO factory contract");
@@ -84,6 +87,20 @@ async fn main() -> anyhow::Result<()> {
     // 5. Get the council deploy contract from dao
     let aurora_dao_id = AccountId::from_str(&format!("aurora-dao.{}", dao_factory.id()))?;
 
+    // 5-1. Owner shift to the new owner of Aurora
+    
+    println!("Shift owner to the new owner");
+    let owner = common::create_account(&worker, "owner.test.near", None).await?;
+
+    let args:NewOwnerArgs = NewOwnerArgs {
+        owner_id: AccountId::from_str("aurora-dao.dao-factory.test.near").unwrap(),
+    };
+    let borsh_args = args.try_to_vec().unwrap();
+    let set_owner = owner.call(&AccountId::from_str("aurora.test.near").unwrap(), "set_owner").args_borsh(borsh_args).transact().await?;
+    let owner = evm.as_account().owner().await?.result;
+    println!("EVM owner: {:?}", owner);
+
+
     println!("Aurora DAO ID: {}", aurora_dao_id);
     let dao_contract = worker
         .import_contract(&aurora_dao_id, &worker)
@@ -92,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
 
     // - Get policy
     let get_policy = dao_contract.view("get_policy").await?;
-    println!("{:?}", get_policy);
+    // println!("{:?}", get_policy);
     let root = worker.root_account()?;
     root.transfer_near(&aurora_dao_id, 10000000000000000000000000)
         .await?.into_result();
@@ -119,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
     worker.fast_forward(1).await?;
 
     // - Add proposal to upgrade aurora contract remotely
-    println!("Add Proposal");
+    println!("Add staging upgrade Proposal");
     let add_upgrade_proposal = bob
         .call(&dao_contract.id(), "add_proposal")
         .args_json(json!({
@@ -128,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
             "kind": {
               "UpgradeRemote": {
                 "receiver_id": "aurora.test.near",
-                "method_name": "deploy_upgrade",
+                "method_name": "stage_upgrade",
                 "hash": "G4bJiWEnJsktaLueP7ri5sh3VhJBr3L1YjtYvKuCwLSC",
                 "role": "council"
               }
@@ -179,4 +196,9 @@ async fn main() -> anyhow::Result<()> {
     println!("Aurora version after upgrade: {}", version_af);
 
     Ok(())
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct NewOwnerArgs {
+    pub owner_id: AccountId,
 }
