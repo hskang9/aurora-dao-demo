@@ -89,11 +89,11 @@ async fn main() -> anyhow::Result<()> {
 
     // 5-1. Owner shift to the new owner of Aurora
     
-    println!("Shift owner to the new owner");
+    println!("Shift owner of Aurora EVM to the new owner");
     let owner = common::create_account(&worker, "owner.test.near", None).await?;
 
     let args:NewOwnerArgs = NewOwnerArgs {
-        owner_id: AccountId::from_str("aurora-dao.dao-factory.test.near").unwrap(),
+        owner_id: AccountId::from_str("aurora.test.near").unwrap(),
     };
     let borsh_args = args.try_to_vec().unwrap();
     let set_owner = owner.call(&AccountId::from_str("aurora.test.near").unwrap(), "set_owner").args_borsh(borsh_args).transact().await?;
