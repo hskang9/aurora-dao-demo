@@ -3,11 +3,12 @@ use aurora_workspace::{
 };
 use aurora_workspace_demo::common;
 use serde_json::json;
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr};
 use workspaces::AccountId;
-use borsh::{BorshSerialize, BorshDeserialize};
 
-
+use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use near_sdk::serde::{Deserialize, Serialize};
+use std::io::{self, Write};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -18,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 2. deploy the Aurora EVM in sandbox.
     let (evm, sk) =
-        common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet-2.8.0-set-owner.wasm")
+        common::init_and_deploy_contract_with_path(&worker, "./res/aurora-testnet.wasm")
             .await?;
 
     worker.fast_forward(1).await?;
@@ -90,15 +91,19 @@ async fn main() -> anyhow::Result<()> {
     // 5-1. Owner shift to the new owner of Aurora
     
     println!("Shift owner of Aurora EVM to the new owner");
-    let owner = common::create_account(&worker, "owner.test.near", None).await?;
 
-    let args:NewOwnerArgs = NewOwnerArgs {
-        owner_id: AccountId::from_str("aurora.test.near").unwrap(),
-    };
-    let borsh_args = args.try_to_vec().unwrap();
-    let set_owner = owner.call(&AccountId::from_str("aurora.test.near").unwrap(), "set_owner").args_borsh(borsh_args).transact().await?;
-    let owner = evm.as_account().owner().await?.result;
-    println!("EVM owner: {:?}", owner);
+    let owner = common::create_account(&worker, "owner.test.near", None).await?;
+    let account = Raw("aurora-dao.dao-factory.test.near".as_bytes().to_vec());
+    
+    let borsh_args = account.try_to_vec()?;
+    //let parsed_account = AccountId::try_from_slice(&borsh_args).unwrap();
+    //println!("Parsed account: {:?}", parsed_account);
+    // Engine automatically converts str bytes into AccountId
+    let set_owner = owner.call(&AccountId::from_str("aurora.test.near").unwrap(), "set_owner").args(borsh_args).transact().await?;
+    println!("5");
+    println!("set_owner_log: {:?}", set_owner);
+    //let owner = evm.as_account().owner().await?.result;
+    //println!("EVM owner: {:?}", owner);
 
 
     println!("Aurora DAO ID: {}", aurora_dao_id);
@@ -110,6 +115,8 @@ async fn main() -> anyhow::Result<()> {
     // - Get policy
     let get_policy = dao_contract.view("get_policy").await?;
     // println!("{:?}", get_policy);
+
+    // Give balances for making proposal
     let root = worker.root_account()?;
     root.transfer_near(&aurora_dao_id, 10000000000000000000000000)
         .await?.into_result();
@@ -135,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 
     worker.fast_forward(1).await?;
 
-    // - Add proposal to upgrade aurora contract remotely
+    // - Add proposal to stage upgrade aurora contract remotely
     println!("Add staging upgrade Proposal");
     let add_upgrade_proposal = bob
         .call(&dao_contract.id(), "add_proposal")
@@ -189,7 +196,76 @@ async fn main() -> anyhow::Result<()> {
 
     worker.fast_forward(1).await?;
 
-    // - Proposal is finalized as all council vote yes, so check if precompile works in aurora.test.near!
+    // - Proposal is finalized as all council vote yes, so check if precompile works in aurora.test.near
+
+    // Add proposal to deploy upgrade on Aurora Engine
+
+    // Give balances for making proposal
+    let root = worker.root_account()?;
+    root.transfer_near(&aurora_dao_id, 10000000000000000000000000)
+        .await?.into_result();
+    root.transfer_near(&bob.id(), 10000000000000000000000000)
+        .await?.into_result();
+    root.transfer_near(&alice.id(), 10000000000000000000000000)
+        .await?.into_result();
+    worker.fast_forward(1).await?;
+
+    // - Add proposal to deploy upgrade aurora contract remotely
+    println!("Add deploying upgrade Proposal");
+    let add_upgrade_proposal = bob
+        .call(&dao_contract.id(), "add_proposal")
+        .args_json(json!({
+          "proposal": {
+            "description": "Upgrade Aurora contract",
+            "kind": {
+              "UpgradeRemote": {
+                "receiver_id": "aurora.test.near",
+                "method_name": "deploy_upgrade",
+                "hash": "G4bJiWEnJsktaLueP7ri5sh3VhJBr3L1YjtYvKuCwLSC",
+                "role": "council"
+              }
+            }
+          }
+        }))
+        .deposit(10u128.pow(24))
+        .transact()
+        .await?;
+    println!("{:?}", add_upgrade_proposal);
+
+    worker.fast_forward(10).await?;
+
+    // - Approve Proposal
+    println!("Approve Proposal from Bob");
+    let approve_proposal1 = bob
+        .call(&dao_contract.id(), "act_proposal")
+        .args_json(json!({
+          "id": 1,
+          "action": "VoteApprove",
+          "memo": ""
+        }))
+        .gas(10038214819423)
+        .transact()
+        .await?;
+    println!("{:?}", approve_proposal1);
+
+    worker.fast_forward(1).await?;
+
+    println!("Approve Proposal from Alice");
+    let approve_proposal2 = alice
+        .call(&dao_contract.id(), "act_proposal")
+        .args_json(json!({
+          "id": 1,
+          "action": "VoteApprove",
+          "memo": ""
+        }))
+        .gas(300_000_000_000_000)
+        .transact()
+        .await?;
+    println!("{:?}", approve_proposal2);
+
+    worker.fast_forward(1).await?;
+
+
     // Import Deployed Aurora contract
     let evm_af = EvmContract::from_secret_key("aurora.test.near", sk, &worker)?;
     let version_af = evm_af.as_account().version().await?.result;
@@ -198,7 +274,24 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewOwnerArgs {
-    pub owner_id: AccountId,
+    pub new_owner: AccountId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Raw(pub Vec<u8>);
+
+impl BorshSerialize for Raw {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        writer.write_all(&self.0)
+    }
+}
+
+impl BorshDeserialize for Raw {
+    fn deserialize(bytes: &mut &[u8]) -> io::Result<Self> {
+        let res = bytes.to_vec();
+        *bytes = &[];
+        Ok(Self(res))
+    }
 }

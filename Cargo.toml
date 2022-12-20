@@ -8,6 +8,7 @@ authors = ["Joshua J. Bouw <hi@jjb.rs>"]
 
 [dependencies]
 aurora-workspace = { git = "https://github.com/aurora-is-near/aurora-workspace.git", rev = "e192c4b152826263499380ba2917cb4ee5946c91" }
+aurora-workspace-types = { git = "https://github.com/aurora-is-near/aurora-workspace.git", rev="e192c4b152826263499380ba2917cb4ee5946c91" }
 workspaces = { git = "https://github.com/near/workspaces-rs.git", rev = "34bb786470700c7f95b0c88201a58b8792b6dba1" }
 ethabi = "18.0.0"
 hex = "0.4.3"
@@ -19,3 +20,5 @@ serde_json = "1.0.64"
 near-units = "0.2.0"
 base64 = "0.13.0"
 borsh = "0.9.1"
+serde = { version = "1", features = ["derive"] }
+near-sdk = "4.0"
